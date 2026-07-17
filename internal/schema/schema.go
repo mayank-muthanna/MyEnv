@@ -36,19 +36,82 @@ type Rule struct {
 
 type Schema map[string]Rule
 
-func Load(path string) (Schema, error) {
-	contents, err := os.ReadFile(path)
+type Document struct {
+	Schema       Schema
+	IgnoreCode   []string
+	IgnoreUnused []string
+	IgnorePaths  []string
+	IgnoreRules  []string
+}
+
+func Load(filePath string) (Schema, error) {
+	document, err := LoadDocument(filePath)
 	if err != nil {
 		return nil, err
 	}
-	return Parse(contents)
+	return document.Schema, nil
+}
+
+func LoadDocument(filePath string) (Document, error) {
+	contents, err := os.ReadFile(filePath)
+	if err != nil {
+		return Document{}, err
+	}
+	return ParseDocument(contents)
 }
 
 func Parse(contents []byte) (Schema, error) {
-	var raw map[string]RawRule
-	if err := yaml.Unmarshal(contents, &raw); err != nil {
-		return nil, fmt.Errorf("parse schema: %w", err)
+	document, err := ParseDocument(contents)
+	if err != nil {
+		return nil, err
 	}
+	return document.Schema, nil
+}
+
+func ParseDocument(contents []byte) (Document, error) {
+	var nodes map[string]yaml.Node
+	if err := yaml.Unmarshal(contents, &nodes); err != nil {
+		return Document{}, fmt.Errorf("parse schema: %w", err)
+	}
+
+	rawRules := make(map[string]RawRule, len(nodes))
+	document := Document{}
+	for key, node := range nodes {
+		switch key {
+		case "ignoreCode":
+			if err := node.Decode(&document.IgnoreCode); err != nil {
+				return Document{}, fmt.Errorf("ignoreCode must be a list of environment names: %w", err)
+			}
+		case "ignoreUnused":
+			if err := node.Decode(&document.IgnoreUnused); err != nil {
+				return Document{}, fmt.Errorf("ignoreUnused must be a list of environment names: %w", err)
+			}
+		case "ignorePaths":
+			if err := node.Decode(&document.IgnorePaths); err != nil {
+				return Document{}, fmt.Errorf("ignorePaths must be a list of paths: %w", err)
+			}
+		case "ignoreRules":
+			if err := node.Decode(&document.IgnoreRules); err != nil {
+				return Document{}, fmt.Errorf("ignoreRules must be a list of diagnostic rules: %w", err)
+			}
+		default:
+			var candidate RawRule
+			if err := node.Decode(&candidate); err != nil {
+				return Document{}, fmt.Errorf("%s: invalid rule: %w", key, err)
+			}
+			rawRules[key] = candidate
+		}
+	}
+
+	rules, err := normalize(rawRules)
+	if err != nil {
+		return Document{}, err
+	}
+	document.Schema = rules
+	return document, nil
+}
+
+func normalize(raw map[string]RawRule) (Schema, error) {
 	result := make(Schema, len(raw))
 	for key, candidate := range raw {
 		if !regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`).MatchString(key) {

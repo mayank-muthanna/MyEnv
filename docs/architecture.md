@@ -9,7 +9,7 @@ before deployment.
 
 ## Product boundaries
 
-- The canonical schema is `.myenv.yaml`; the default value file is `.env`.
+- The canonical schema is `.myenv.yaml`; it also holds optional scan ignore policy. The default value file is `.env`.
 - `validate` checks values against the schema.
 - `scan` checks static JS/TS environment usage against the schema and scans
   tracked `.env*` files for likely committed credentials.
@@ -62,7 +62,7 @@ for numeric types. Defaults participate in validation when a key is absent.
 - `internal/diff` calculates code-minus-schema and code-minus-dotenv errors, plus unused configuration
   warnings. A `secret: true` variable referenced via `import.meta.env` is an
   error because bundlers can expose it to browsers.
-- `internal/ignore` loads optional `.myenvignore.yaml` policy and filters diagnostics by path, rule ID, or environment key.
+- `internal/ignore` applies schema-owned ignore policy by path, rule ID, code key, or unused config key.
 - `internal/leaks` scans tracked `.env*` files with a small curated set of
   high-signal credential patterns and never includes matched values in output.
 - `internal/diagnostic` defines a stable severity, rule ID, location, and

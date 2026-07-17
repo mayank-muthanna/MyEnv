@@ -1,35 +1,18 @@
 package ignore
 
 import (
-	"errors"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/myenv-cli/myenv/internal/diagnostic"
-	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Paths []string `yaml:"paths"`
-	Rules []string `yaml:"rules"`
-	Env   []string `yaml:"env"`
-}
-
-func Load(filePath string) (Config, error) {
-	contents, err := os.ReadFile(filePath)
-	if errors.Is(err, os.ErrNotExist) {
-		return Config{}, nil
-	}
-	if err != nil {
-		return Config{}, err
-	}
-	var config Config
-	if err := yaml.Unmarshal(contents, &config); err != nil {
-		return Config{}, err
-	}
-	return config, nil
+	Code   []string
+	Unused []string
+	Paths  []string
+	Rules  []string
 }
 
 func (config Config) SkipPath(root, filePath string) bool {
@@ -43,7 +26,7 @@ func (config Config) SkipPath(root, filePath string) bool {
 func (config Config) Filter(root string, diagnostics []diagnostic.Diagnostic) []diagnostic.Diagnostic {
 	filtered := make([]diagnostic.Diagnostic, 0, len(diagnostics))
 	for _, item := range diagnostics {
-		if matchesAny(config.Rules, item.Rule) || matchesAny(config.Env, item.Key) {
+		if matchesAny(config.Rules, item.Rule) || isIgnoredCode(config, item) || isIgnoredUnused(config, item) {
 			continue
 		}
 		if item.Path != "" && config.SkipPath(root, item.Path) {
@@ -52,6 +35,17 @@ func (config Config) Filter(root string, diagnostics []diagnostic.Diagnostic) []
 		filtered = append(filtered, item)
 	}
 	return filtered
+}
+
+func isIgnoredCode(config Config, item diagnostic.Diagnostic) bool {
+	if !matchesAny(config.Code, item.Key) {
+		return false
+	}
+	return strings.HasPrefix(item.Rule, "undeclared-code-") || item.Rule == "client-secret-exposure"
+}
+
+func isIgnoredUnused(config Config, item diagnostic.Diagnostic) bool {
+	return item.Rule == "unused-config-env" && matchesAny(config.Unused, item.Key)
 }
 
 func matchesAny(patterns []string, value string) bool {

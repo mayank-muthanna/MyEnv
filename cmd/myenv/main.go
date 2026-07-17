@@ -75,22 +75,17 @@ func validateCommand() *cobra.Command {
 }
 
 func scanCommand() *cobra.Command {
-	var schemaPath, root, envPath, ignorePath, format string
+	var schemaPath, root, envPath, format string
 	command := &cobra.Command{Use: "scan", Short: "Cross-reference code, .env, and .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
-		rules, err := schema.Load(schemaPath)
+		document, err := schema.LoadDocument(schemaPath)
 		if err != nil {
 			return err
 		}
+		rules := document.Schema
 		if envPath == "" {
 			envPath = filepath.Join(root, ".env")
 		}
-		if ignorePath == "" {
-			ignorePath = filepath.Join(root, ".myenvignore.yaml")
-		}
-		policy, err := ignore.Load(ignorePath)
-		if err != nil {
-			return err
-		}
+		policy := ignore.Config{Code: document.IgnoreCode, Unused: document.IgnoreUnused, Paths: document.IgnorePaths, Rules: document.IgnoreRules}
 		values, err := validate.LoadDotenv(envPath)
 		if err != nil {
 			return err
@@ -112,7 +107,6 @@ func scanCommand() *cobra.Command {
 	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path")
 	command.Flags().StringVar(&root, "root", ".", "repository root")
 	command.Flags().StringVar(&envPath, "env", "", "dotenv path (defaults to <root>/.env)")
-	command.Flags().StringVar(&ignorePath, "ignore", "", "ignore policy path (defaults to <root>/.myenvignore.yaml)")
 	command.Flags().StringVar(&format, "format", "text", "output format: text or json")
 	return command
 }

@@ -7,12 +7,13 @@ import (
 	"github.com/myenv-cli/myenv/internal/diagnostic"
 )
 
-func TestConfigFiltersPathsRulesAndEnv(t *testing.T) {
+func TestConfigFiltersPathsRulesCodeAndUnused(t *testing.T) {
 	root := t.TempDir()
-	config := Config{Paths: []string{".nuxt/"}, Rules: []string{"dynamic-*"}, Env: []string{"NITRO_*"}}
+	config := Config{Paths: []string{".nuxt/"}, Rules: []string{"dynamic-*"}, Code: []string{"NITRO_*"}, Unused: []string{"CONVEX_*"}}
 	diagnostics := []diagnostic.Diagnostic{
 		{Rule: "dynamic-env-access", Path: filepath.Join(root, "src", "app.ts")},
 		{Rule: "undeclared-code-env", Key: "NITRO_ENV_PREFIX", Path: filepath.Join(root, "src", "app.ts")},
+		{Rule: "unused-config-env", Key: "CONVEX_SELF_HOSTED_ADMIN_KEY"},
 		{Rule: "undeclared-code-env", Key: "KEEP", Path: filepath.Join(root, ".nuxt", "dev", "index.mjs")},
 		{Rule: "undeclared-code-env", Key: "KEEP", Path: filepath.Join(root, "src", "app.ts")},
 	}
