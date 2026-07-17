@@ -17,14 +17,32 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	red    = "\033[31m"
+	yellow = "\033[33m"
+	green  = "\033[32m"
+	reset  = "\033[0m"
+)
+
 func main() {
-	if err := rootCommand().Execute(); err != nil {
+	command := rootCommand()
+	if err := command.Execute(); err != nil {
+		fmt.Fprintf(command.ErrOrStderr(), "%serror:%s %v\nRun %q for commands and flags.\n", red, reset, err, "myenv help")
 		os.Exit(1)
 	}
 }
 
 func rootCommand() *cobra.Command {
-	command := &cobra.Command{Use: "myenv", Short: "Enforce environment configuration contracts"}
+	command := &cobra.Command{
+		Use:               "myenv",
+		Short:             "Enforce environment configuration contracts",
+		SilenceUsage:      true,
+		SilenceErrors:     true,
+		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
+		Run: func(command *cobra.Command, arguments []string) {
+			fmt.Fprintln(command.OutOrStdout(), "myenv checks environment configuration. Run 'myenv help' for commands and flags.")
+		},
+	}
 	command.AddCommand(validateCommand(), scanCommand(), inferCommand())
 	return command
 }
@@ -91,7 +109,7 @@ func inferCommand() *cobra.Command {
 		if err := os.WriteFile(output, contents, 0644); err != nil {
 			return err
 		}
-		fmt.Fprintf(command.OutOrStdout(), "created %s from %s\n", output, envPath)
+		fmt.Fprintf(command.OutOrStdout(), "%sÃ¢Å“â€œ%s created %s from %s\n", green, reset, output, envPath)
 		return nil
 	}}
 	command.Flags().StringVar(&envPath, "env", ".env", "dotenv path")
@@ -123,7 +141,7 @@ func report(diagnostics []diagnostic.Diagnostic, format string) error {
 			return err
 		}
 	} else if len(diagnostics) == 0 {
-		fmt.Println("✓ no issues found")
+		fmt.Printf("%sÃ¢Å“â€œ%s no issues found\n", green, reset)
 	} else {
 		for _, item := range diagnostics {
 			location := ""
@@ -134,11 +152,11 @@ func report(diagnostics []diagnostic.Diagnostic, format string) error {
 				}
 				location += ": "
 			}
-			marker := "⚠"
+			marker, color := "Ã¢Å¡Â ", yellow
 			if item.IsError() {
-				marker = "✗"
+				marker, color = "Ã¢Å“â€”", red
 			}
-			fmt.Printf("%s %s[%s] %s\n", marker, location, item.Rule, item.Message)
+			fmt.Printf("%s%s%s %s[%s] %s\n", color, marker, reset, location, item.Rule, item.Message)
 		}
 	}
 	for _, item := range diagnostics {
