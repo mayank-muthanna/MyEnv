@@ -1,0 +1,11 @@
+STRIPE_SECRET_KEY:
+  type: string
+  required: false
+  pattern: '^sk_(live|test)_[A-Za-z0-9]{24,}$'
+  secret: true
+PORT:
+  type: int
+  required: true
+  range: { min: 1, max: 65535 }
+OLD_FEATURE_FLAG:
+  type: bool
