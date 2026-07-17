@@ -12,6 +12,7 @@ type Diagnostic struct {
 	Rule     string   `json:"rule"`
 	Key      string   `json:"key,omitempty"`
 	Message  string   `json:"message"`
+	Hint     string   `json:"hint,omitempty"`
 	Path     string   `json:"path,omitempty"`
 	Line     int      `json:"line,omitempty"`
 }

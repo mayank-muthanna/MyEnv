@@ -2,7 +2,9 @@ package validate
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/myenv-cli/myenv/internal/diagnostic"
@@ -63,7 +65,11 @@ func Env(rules schema.Schema, values map[string]string) []diagnostic.Diagnostic 
 		rule := rules[key]
 		raw, present := values[key]
 		for _, message := range Value(rule, raw, present) {
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "invalid-value", Key: key, Message: key + " " + message})
+			hint := ""
+			if message == "does not match required pattern" {
+				hint = PatternHint(rule, raw)
+			}
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "invalid-value", Key: key, Message: key + " " + message, Hint: hint})
 		}
 	}
 	for key := range values {
@@ -72,4 +78,114 @@ func Env(rules schema.Schema, values map[string]string) []diagnostic.Diagnostic 
 		}
 	}
 	return diagnostics
+}
+
+// PatternHint explains recognized regex constraints without exposing env values.
+func PatternHint(rule schema.Rule, raw string) string {
+	pattern := rule.Pattern.String()
+	if choices, ok := allowedChoices(pattern); ok {
+		return "Allowed values: " + quoteChoices(choices) + "."
+	}
+	if hint, ok := characterRuleHint(pattern, raw); ok {
+		return hint
+	}
+	prefix := literalAnchoredPrefix(pattern)
+	if prefix != "" && !strings.HasPrefix(raw, prefix) {
+		return fmt.Sprintf("Value must start with %q. Update %s or change its pattern if this value is intentional.", prefix, rule.Key)
+	}
+	return "Pattern is custom. Check required prefix, allowed characters, and length."
+}
+
+var (
+	choicePattern        = regexp.MustCompile(`^\^(.+)\(([^()|]+(?:\|[^()|]+)+)\)\$?$`)
+	characterRulePattern = regexp.MustCompile(`^\^([^\[\]{}()*+?|^$\\]*)\[([^\]]+)\]\{([0-9]+)(?:,([0-9]*))?\}\$?$`)
+)
+
+func allowedChoices(pattern string) ([]string, bool) {
+	match := choicePattern.FindStringSubmatch(pattern)
+	if len(match) == 0 || !strings.Contains(match[2], "|") {
+		return nil, false
+	}
+	choices := strings.Split(match[2], "|")
+	for index, choice := range choices {
+		if choice == "" || strings.ContainsAny(choice, `\\^$*+?[]{}()|`) {
+			return nil, false
+		}
+		choices[index] = match[1] + choice
+	}
+	return choices, true
+}
+
+func characterRuleHint(pattern, raw string) (string, bool) {
+	match := characterRulePattern.FindStringSubmatch(pattern)
+	if len(match) == 0 {
+		return "", false
+	}
+	prefix, class, minimumText, maximumText := match[1], match[2], match[3], match[4]
+	if prefix != "" && !strings.HasPrefix(raw, prefix) {
+		return fmt.Sprintf("Value must start with %q.", prefix), true
+	}
+	value := strings.TrimPrefix(raw, prefix)
+	minimum, _ := strconv.Atoi(minimumText)
+	maximum := -1
+	if maximumText != "" {
+		maximum, _ = strconv.Atoi(maximumText)
+	}
+	var problems []string
+	length := len([]rune(value))
+	if length < minimum {
+		problems = append(problems, fmt.Sprintf("Must contain at least %d characters", minimum))
+	}
+	if maximum >= 0 && length > maximum {
+		problems = append(problems, fmt.Sprintf("Must contain at most %d characters", maximum))
+	}
+	if !regexp.MustCompile("^[" + class + "]+$").MatchString(value) {
+		problems = append(problems, "Allowed characters: "+describeCharacterClass(class))
+	}
+	if len(problems) == 0 {
+		return "Value does not meet its required character format.", true
+	}
+	return strings.Join(problems, ". ") + ".", true
+}
+
+func describeCharacterClass(class string) string {
+	var descriptions []string
+	if strings.Contains(class, "A-Z") || strings.Contains(class, "a-z") {
+		descriptions = append(descriptions, "letters")
+	}
+	if strings.Contains(class, "0-9") {
+		descriptions = append(descriptions, "numbers")
+	}
+	if strings.Contains(class, "_") {
+		descriptions = append(descriptions, "underscores")
+	}
+	if strings.Contains(class, "-") {
+		descriptions = append(descriptions, "hyphens")
+	}
+	if len(descriptions) == 0 {
+		return "characters from the configured allowed set"
+	}
+	return strings.Join(descriptions, ", ")
+}
+
+func quoteChoices(choices []string) string {
+	quoted := make([]string, len(choices))
+	for index, choice := range choices {
+		quoted[index] = fmt.Sprintf("%q", choice)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func literalAnchoredPrefix(pattern string) string {
+	if !strings.HasPrefix(pattern, "^") {
+		return ""
+	}
+	var prefix strings.Builder
+	for _, character := range pattern[1:] {
+		if strings.ContainsRune(`\\.^$*+?([{)|`, character) {
+			break
+		}
+		prefix.WriteRune(character)
+	}
+	return prefix.String()
 }

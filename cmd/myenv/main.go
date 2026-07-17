@@ -191,6 +191,9 @@ func report(commandName string, diagnostics []diagnostic.Diagnostic, format stri
 				fmt.Printf("  %s@ %s%s", gray, location, reset)
 			}
 			fmt.Println()
+			if item.Hint != "" {
+				fmt.Printf("  %shint: %s%s\n", gray, item.Hint, reset)
+			}
 		}
 		fmt.Printf("%s------------------------------------------------------------%s\n", gray, reset)
 		if errorCount > 0 {
