@@ -36,12 +36,20 @@ type Rule struct {
 
 type Schema map[string]Rule
 
+type EncryptedEnv struct {
+	Version     int    `yaml:"version"`
+	Algorithm   string `yaml:"algorithm"`
+	Compression string `yaml:"compression"`
+	Nonce       string `yaml:"nonce"`
+	Ciphertext  string `yaml:"ciphertext"`
+}
 type Document struct {
 	Schema       Schema
 	IgnoreCode   []string
 	IgnoreUnused []string
 	IgnorePaths  []string
 	IgnoreRules  []string
+	EncryptedEnv *EncryptedEnv
 }
 
 func Load(filePath string) (Schema, error) {
@@ -78,6 +86,10 @@ func ParseDocument(contents []byte) (Document, error) {
 	document := Document{}
 	for key, node := range nodes {
 		switch key {
+		case "encryptedEnv":
+			if err := node.Decode(&document.EncryptedEnv); err != nil {
+				return Document{}, fmt.Errorf("encryptedEnv must be an encrypted payload: %w", err)
+			}
 		case "ignoreCode":
 			if err := node.Decode(&document.IgnoreCode); err != nil {
 				return Document{}, fmt.Errorf("ignoreCode must be a list of environment names: %w", err)
@@ -180,7 +192,15 @@ func RenderDocument(document Document) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte(inferIgnoreTemplate), contents...), nil
+	rendered := append([]byte(inferIgnoreTemplate), contents...)
+	if document.EncryptedEnv == nil {
+		return rendered, nil
+	}
+	encryptedContents, err := yaml.Marshal(map[string]*EncryptedEnv{"encryptedEnv": document.EncryptedEnv})
+	if err != nil {
+		return nil, err
+	}
+	return append(append(rendered, '\n'), encryptedContents...), nil
 }
 
 const inferIgnoreTemplate = `# Pattern guide (Go/RE2 regular expressions; pattern checks whole value only when you use ^ and $).

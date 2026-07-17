@@ -71,6 +71,32 @@ go run ./cmd/myenv validate
 go run ./cmd/myenv scan
 ```
 
+## Encrypt and decrypt dotenv files
+
+`encrypt` reads dotenv bytes exactly as they exist (including comments, ordering,
+and whitespace), compresses them with gzip, then encrypts them with AES-256-GCM.
+The encrypted payload is written as the final `encryptedEnv` block in the same
+`.myenv.yaml` file. The encryption key is **never** written to that file.
+
+```powershell
+# Generates a new random key. Save the [KEY] value in a password manager.
+myenv encrypt --env .env.local
+
+# Restores exact original dotenv bytes to a safe new path.
+myenv decrypt --key <saved-key> --output .env.local.restored
+```
+
+To supply your own key, provide a base64url-encoded, 32-byte key to both
+commands. This is a raw AES-256 key, not a password or phrase:
+
+```powershell
+myenv encrypt --env .env.local --key <your-32-byte-base64url-key>
+myenv decrypt --key <your-32-byte-base64url-key> --output .env.local.restored
+```
+
+`decrypt` refuses to replace an existing file. Use a different `--output`, or
+add `--force` only when replacement is intentional. Losing the key means the
+payload cannot be recovered.
 ## Schema file
 
 The default schema path is `.myenv.yaml`. Its top-level keys are environment

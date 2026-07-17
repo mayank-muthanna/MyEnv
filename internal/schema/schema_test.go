@@ -71,3 +71,26 @@ func TestRenderDocumentPreservesIgnorePolicy(t *testing.T) {
 		t.Fatalf("ignore policy lost: %#v", document)
 	}
 }
+
+func TestRenderDocumentKeepsEncryptedPayloadLast(t *testing.T) {
+	document := Document{
+		Schema: Schema{"PORT": {Key: "PORT", Type: "int"}},
+		EncryptedEnv: &EncryptedEnv{
+			Version: 1, Algorithm: "AES-256-GCM", Compression: "gzip", Nonce: "nonce", Ciphertext: "ciphertext",
+		},
+	}
+	contents, err := RenderDocument(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contents), "\nencryptedEnv:\n") {
+		t.Fatalf("expected payload at bottom: %s", contents)
+	}
+	parsed, err := ParseDocument(contents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.EncryptedEnv == nil || parsed.EncryptedEnv.Ciphertext != "ciphertext" {
+		t.Fatal("encrypted payload did not round trip through schema")
+	}
+}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/myenv-cli/myenv/internal/diagnostic"
 	"github.com/myenv-cli/myenv/internal/diff"
+	"github.com/myenv-cli/myenv/internal/envcrypt"
 	"github.com/myenv-cli/myenv/internal/ignore"
 	"github.com/myenv-cli/myenv/internal/infer"
 	"github.com/myenv-cli/myenv/internal/leaks"
@@ -55,7 +56,7 @@ func rootCommand() *cobra.Command {
 			fmt.Fprintln(command.OutOrStdout(), "myenv checks environment configuration. Run 'myenv help' for commands and flags.")
 		},
 	}
-	command.AddCommand(validateCommand(), scanCommand(), inferCommand())
+	command.AddCommand(validateCommand(), scanCommand(), inferCommand(), encryptCommand(), decryptCommand())
 	command.SetHelpFunc(renderHelp)
 	return command
 }
@@ -82,8 +83,11 @@ func renderRootHelp(output io.Writer) {
 	helpCommand(output, "infer", "Generate or sync .myenv.yaml from a dotenv file", "--env, --output")
 	helpCommand(output, "validate", "Check dotenv values against schema rules", "--env, --schema, --format")
 	helpCommand(output, "scan", "Cross-reference code, dotenv, and schema", "--root, --env, --schema, --format")
+	helpCommand(output, "encrypt", "Compress and encrypt a dotenv file into schema", "--env, --schema, --key")
+	helpCommand(output, "decrypt", "Restore encrypted dotenv with its key", "--schema, --key, --output")
 	fmt.Fprintln(output)
 	section(output, "NEED DETAILS?", "Every command has its own flags and examples")
+	commandExample(output, "myenv help encrypt")
 	commandExample(output, "myenv help scan")
 	commandExample(output, "myenv validate --help")
 }
@@ -130,6 +134,10 @@ func commandGuidance(name string) string {
 		return "Use before running your app to catch missing, malformed, or unsafe configuration."
 	case "scan":
 		return "Use in development or CI to find config drift, unused values, and likely committed secrets."
+	case "encrypt":
+		return "Use to store a compressed, encrypted dotenv payload inside .myenv.yaml. Save printed key outside repository."
+	case "decrypt":
+		return "Use saved encryption key to restore encryptedEnv. Existing output files require --force."
 	default:
 		return "Run this command with the flags below."
 	}
@@ -143,11 +151,14 @@ func commandExamples(name string) []string {
 		return []string{"myenv validate --env .env.local", "myenv validate --schema config/.myenv.yaml --env .env.production", "myenv validate --env .env.local --format json"}
 	case "scan":
 		return []string{"myenv scan --root . --env .env.local", "myenv scan --root apps/web --schema config/.myenv.yaml --env apps/web/.env", "myenv scan --env .env.local --format json"}
+	case "encrypt":
+		return []string{"myenv encrypt", "myenv encrypt --env .env.local", "myenv encrypt --key <base64url-32-byte-key>"}
+	case "decrypt":
+		return []string{"myenv decrypt --key <saved-key>", "myenv decrypt --key <saved-key> --output .env --force"}
 	default:
 		return nil
 	}
 }
-
 func section(output io.Writer, title, subtitle string) {
 	fmt.Fprintf(output, "%s%s%s%s", bold, blue, title, reset)
 	if subtitle != "" {
@@ -228,6 +239,95 @@ func scanCommand() *cobra.Command {
 	return command
 }
 
+func encryptCommand() *cobra.Command {
+	var schemaPath, envPath, encodedKey string
+	command := &cobra.Command{Use: "encrypt", Short: "Compress and encrypt a dotenv file into .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
+		plaintext, err := os.ReadFile(envPath)
+		if err != nil {
+			return err
+		}
+		document, err := schema.LoadDocument(schemaPath)
+		if err != nil {
+			return err
+		}
+		key, generated, err := encryptionKey(encodedKey)
+		if err != nil {
+			return err
+		}
+		payload, err := envcrypt.Encrypt(plaintext, key)
+		if err != nil {
+			return err
+		}
+		document.EncryptedEnv = payload
+		contents, err := schema.RenderDocument(document)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(schemaPath, contents, 0600); err != nil {
+			return err
+		}
+		fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s encrypted %s into %s %s(gzip + AES-256-GCM)%s\n", green, reset, envPath, schemaPath, gray, reset)
+		if generated {
+			encoded, err := envcrypt.EncodeKey(key)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(command.OutOrStdout(), "%s[KEY]%s Save this key outside repository: %s%s%s\n", bold, yellow, green, encoded, reset)
+		}
+		fmt.Fprintf(command.OutOrStdout(), "%s[HINT]%s Key never saved in %s. Use %q to restore exact dotenv file.\n", blue, reset, schemaPath, "myenv decrypt --key <saved-key>")
+		return nil
+	}}
+	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path where encryptedEnv is stored")
+	command.Flags().StringVar(&envPath, "env", ".env", "dotenv file to encrypt")
+	command.Flags().StringVar(&encodedKey, "key", "", "optional base64url-encoded 32-byte key; omit to generate one")
+	return command
+}
+
+func decryptCommand() *cobra.Command {
+	var schemaPath, output, encodedKey string
+	var force bool
+	command := &cobra.Command{Use: "decrypt", Short: "Restore encrypted dotenv values from .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
+		if encodedKey == "" {
+			return fmt.Errorf("--key is required; myenv never stores encryption keys")
+		}
+		key, err := envcrypt.ParseKey(encodedKey)
+		if err != nil {
+			return err
+		}
+		document, err := schema.LoadDocument(schemaPath)
+		if err != nil {
+			return err
+		}
+		plaintext, err := envcrypt.Decrypt(document.EncryptedEnv, key)
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(output); err == nil && !force {
+			return fmt.Errorf("%s already exists; choose another --output or add --force", output)
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if err := os.WriteFile(output, plaintext, 0600); err != nil {
+			return err
+		}
+		fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s restored encrypted dotenv to %s\n", green, reset, output)
+		return nil
+	}}
+	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path containing encryptedEnv")
+	command.Flags().StringVar(&encodedKey, "key", "", "base64url-encoded 32-byte key printed or supplied during encrypt")
+	command.Flags().StringVar(&output, "output", ".env.decrypted", "dotenv output path")
+	command.Flags().BoolVar(&force, "force", false, "replace an existing output file")
+	return command
+}
+
+func encryptionKey(encoded string) ([]byte, bool, error) {
+	if encoded != "" {
+		key, err := envcrypt.ParseKey(encoded)
+		return key, false, err
+	}
+	key, err := envcrypt.GenerateKey()
+	return key, true, err
+}
 func inferCommand() *cobra.Command {
 	var envPath, output string
 	command := &cobra.Command{Use: "infer", Short: "Generate or sync .myenv.yaml from a dotenv file", RunE: func(command *cobra.Command, arguments []string) error {

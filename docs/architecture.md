@@ -24,10 +24,29 @@ before deployment.
 | `myenv validate` | Load schema and dotenv file, apply type and rule validation. | `1` when any validation error exists. |
 | `myenv scan` | Find static JS/TS env references, compare code, `.env`, and schema keys, and inspect tracked `.env*` files for leaks. | `1` when a hard diagnostic exists. |
 | `myenv infer` | Load `.env`, infer conservative rule types, then create, override, sync, or skip the schema through an interactive menu. | `1` for input/output failures or cancelled selection. |
+| `myenv encrypt` | Gzip-compress raw dotenv bytes, encrypt them with AES-256-GCM, and save `encryptedEnv` last in the schema file. | `1` for input, schema, key, or write failures. |
+| `myenv decrypt` | Authenticate, decrypt, and decompress `encryptedEnv` to a chosen dotenv output path. | `1` for missing/wrong key, altered data, or output failure. |
 
 All commands support text diagnostics; `validate` and `scan` also provide JSON
 diagnostics for CI and the GitHub Action.
 
+## Encrypted dotenv payload
+
+`encryptedEnv` is optional schema metadata, always rendered after normal schema
+rules and ignore policy. It contains format version, algorithm, compression,
+nonce, and ciphertext. It contains no encryption key.
+
+`encrypt` treats the dotenv file as bytes rather than parsed values, so a
+successful decrypt restores comments, ordering, quoting, and line endings
+losslessly. It performs gzip compression before AES-256-GCM authenticated
+encryption. Each encryption operation creates a fresh nonce.
+
+Without `--key`, `encrypt` generates a cryptographically random 32-byte key,
+prints its base64url form once, and leaves storage to the user. `--key` accepts
+that same base64url-encoded 32-byte form for user-managed keys. `decrypt`
+requires it and refuses output-file replacement unless `--force` is explicit.
+A wrong key or modified ciphertext fails authentication before any dotenv file
+is written.
 ## Schema
 
 The schema maps environment-variable names to rules. Rules compose a small set
