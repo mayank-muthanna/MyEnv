@@ -122,6 +122,10 @@ Use this once for a new repository or after intentionally adding several
 variables. It overwrites the output file, so review or commit current schema
 first.
 
+infer also writes a commented ignorePaths, ignoreRules, ignoreCode, and
+ignoreUnused template at the top of the generated file. Uncomment only entries
+you need.
+
 ### `myenv validate`
 
 Validate dotenv values against schema:

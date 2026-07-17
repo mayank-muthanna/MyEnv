@@ -1,6 +1,9 @@
 package schema
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseCompilesRules(t *testing.T) {
 	rules, err := Parse([]byte("PORT:\n  type: int\n  range: { min: 1, max: 10 }\nTOKEN:\n  type: string\n  pattern: '^tok_'\n"))
@@ -31,5 +34,18 @@ func TestParseDocumentReadsIgnoreMetadata(t *testing.T) {
 	}
 	if len(document.IgnoreCode) != 1 || len(document.IgnoreUnused) != 1 || len(document.IgnorePaths) != 1 || len(document.IgnoreRules) != 1 {
 		t.Fatalf("unexpected ignore metadata: %#v", document)
+	}
+}
+
+func TestRenderIncludesCommentedIgnoreTemplate(t *testing.T) {
+	contents, err := Render(Schema{"PORT": {Key: "PORT", Type: "int"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contents), "# ignoreCode:") || !strings.Contains(string(contents), "# ignoreUnused:") {
+		t.Fatalf("missing ignore template: %s", contents)
+	}
+	if _, err := Parse(contents); err != nil {
+		t.Fatalf("rendered schema must parse: %v", err)
 	}
 }

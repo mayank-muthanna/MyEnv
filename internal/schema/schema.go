@@ -160,8 +160,24 @@ func Render(rules Schema) ([]byte, error) {
 		}
 		raw[key] = RawRule{Type: rule.Type, Required: rule.Required, Default: rule.Default, Pattern: pattern, Range: rule.Range, Secret: rule.Secret}
 	}
-	return yaml.Marshal(raw)
+	contents, err := yaml.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(inferIgnoreTemplate), contents...), nil
 }
+
+const inferIgnoreTemplate = `# Optional scan ignore policy. Uncomment only entries you need.
+# ignorePaths:
+#   - .nuxt/
+# ignoreRules:
+#   - dynamic-env-access
+# ignoreCode:
+#   - EXTERNAL_PROVIDER_SECRET
+# ignoreUnused:
+#   - DEPLOYMENT_ONLY_SETTING
+
+`
 
 func LooksSecretName(key string) bool {
 	upper := strings.ToUpper(key)
