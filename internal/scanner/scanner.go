@@ -18,10 +18,11 @@ type Access struct {
 }
 
 var (
-	processDot = regexp.MustCompile(`\bprocess\.env\.([A-Z_][A-Z0-9_]*)\b`)
-	processKey = regexp.MustCompile("\\bprocess\\.env\\[\\s*['\"]([A-Z_][A-Z0-9_]*)['\"]\\s*\\]")
-	importMeta = regexp.MustCompile(`\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)\b`)
-	dynamicEnv = regexp.MustCompile(`\b(process\.env\s*\[|import\.meta\.env\s*\[)`)
+	processDot         = regexp.MustCompile(`\bprocess\.env\.([A-Z_][A-Z0-9_]*)\b`)
+	processKey         = regexp.MustCompile("\\bprocess\\.env\\[\\s*['\"]([A-Z_][A-Z0-9_]*)['\"]\\s*\\]")
+	importMeta         = regexp.MustCompile(`\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)\b`)
+	dynamicEnv         = regexp.MustCompile(`\b(process\.env\s*\[|import\.meta\.env\s*\[)`)
+	maxSourceLineBytes = 10 * 1024 * 1024
 )
 
 func Scan(root string) ([]Access, []diagnostic.Diagnostic, error) {
@@ -49,6 +50,7 @@ func Scan(root string) ([]Access, []diagnostic.Diagnostic, error) {
 		defer file.Close()
 		lineNumber := 0
 		lines := bufio.NewScanner(file)
+		lines.Buffer(make([]byte, 64*1024), maxSourceLineBytes)
 		for lines.Scan() {
 			lineNumber++
 			line := lines.Text()
