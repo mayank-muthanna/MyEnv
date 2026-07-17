@@ -140,10 +140,18 @@ Validation reports errors and exits `1` when:
 - A value does not match `pattern`.
 - `.env` contains a variable absent from the schema.
 
+Text output uses color and compact labels: red `[ERROR]` / `[FAIL]`, yellow
+`[WARN]`, green `[PASS]`, blue rule names and `[HINT]`, and gray locations and
+separators. JSON output remains uncolored.
+
 Example failure:
 
 ```text
-[ERROR] [invalid-value] PORT must be at most 65535
+MYENV VALIDATE  1 diagnostic
+------------------------------------------------------------
+[ERROR] invalid-value  PORT must be at most 65535
+------------------------------------------------------------
+[FAIL] 1 errors, 0 warnings. [HINT] Run "myenv help" for commands and flags.
 ```
 
 Fix source value or schema rule, then rerun the command.

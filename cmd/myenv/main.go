@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,20 +19,26 @@ import (
 )
 
 const (
-	red    = "\033[31m"
-	yellow = "\033[33m"
-	green  = "\033[32m"
+	red    = "\033[38;5;203m"
+	yellow = "\033[38;5;220m"
+	green  = "\033[38;5;114m"
+	blue   = "\033[38;5;111m"
+	gray   = "\033[38;5;245m"
+	bold   = "\033[1m"
 	reset  = "\033[0m"
 )
+
+var errChecksFailed = errors.New("checks failed")
 
 func main() {
 	command := rootCommand()
 	if err := command.Execute(); err != nil {
-		fmt.Fprintf(command.ErrOrStderr(), "%serror:%s %v\nRun %q for commands and flags.\n", red, reset, err, "myenv help")
+		if !errors.Is(err, errChecksFailed) {
+			fmt.Fprintf(command.ErrOrStderr(), "%s%s[ERROR]%s %v\n%s[HINT]%s Run %q for commands and flags.\n", bold, red, reset, err, blue, reset, "myenv help")
+		}
 		os.Exit(1)
 	}
 }
-
 func rootCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:               "myenv",
@@ -58,7 +65,7 @@ func validateCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return report(validate.Env(rules, values), format)
+		return report("validate", validate.Env(rules, values), format)
 	}}
 	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path")
 	command.Flags().StringVar(&envPath, "env", ".env", "dotenv path")
@@ -91,7 +98,7 @@ func scanCommand() *cobra.Command {
 			return err
 		}
 		diagnostics = append(diagnostics, leakDiagnostics...)
-		return report(diagnostics, format)
+		return report("scan", diagnostics, format)
 	}}
 	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path")
 	command.Flags().StringVar(&root, "root", ".", "repository root")
@@ -139,7 +146,7 @@ func inferType(value string) string {
 	return "string"
 }
 
-func report(diagnostics []diagnostic.Diagnostic, format string) error {
+func report(commandName string, diagnostics []diagnostic.Diagnostic, format string) error {
 	if format != "text" && format != "json" {
 		return fmt.Errorf("unsupported format %q", format)
 	}
@@ -150,28 +157,43 @@ func report(diagnostics []diagnostic.Diagnostic, format string) error {
 			return err
 		}
 	} else if len(diagnostics) == 0 {
-		fmt.Printf("%s[PASS]%s no issues found\n", green, reset)
+		fmt.Printf("%s%s[PASS]%s %s%s completed with no issues.%s\n", bold, green, reset, gray, strings.ToUpper(commandName), reset)
 	} else {
+		errorCount, warningCount := 0, 0
 		for _, item := range diagnostics {
+			if item.IsError() {
+				errorCount++
+			} else {
+				warningCount++
+			}
+		}
+
+		fmt.Printf("%s%sMYENV %s%s  %s%d diagnostics%s\n", bold, blue, strings.ToUpper(commandName), reset, gray, len(diagnostics), reset)
+		fmt.Printf("%s------------------------------------------------------------%s\n", gray, reset)
+		for _, item := range diagnostics {
+			label, color := "[WARN]", yellow
+			if item.IsError() {
+				label, color = "[ERROR]", red
+			}
 			location := ""
 			if item.Path != "" {
 				location = filepath.Clean(item.Path)
 				if item.Line != 0 {
 					location += fmt.Sprintf(":%d", item.Line)
 				}
-				location += ": "
 			}
-			marker, color := "[WARN]", yellow
-			if item.IsError() {
-				marker, color = "[ERROR]", red
+			fmt.Printf("%s%s%s %s%s%s  %s%s", bold, color, label, reset, blue, item.Rule, reset, item.Message)
+			if location != "" {
+				fmt.Printf("  %s@ %s%s", gray, location, reset)
 			}
-			fmt.Printf("%s%s%s %s[%s] %s\n", color, marker, reset, location, item.Rule, item.Message)
+			fmt.Println()
 		}
-	}
-	for _, item := range diagnostics {
-		if item.IsError() {
-			return fmt.Errorf("checks failed")
+		fmt.Printf("%s------------------------------------------------------------%s\n", gray, reset)
+		if errorCount > 0 {
+			fmt.Printf("%s%s[FAIL]%s %d errors, %d warnings. %s[HINT]%s Run %q for commands and flags.\n", bold, red, reset, errorCount, warningCount, blue, reset, "myenv help")
+			return errChecksFailed
 		}
+		fmt.Printf("%s%s[PASS]%s no errors, %d warnings.\n", bold, green, reset, warningCount)
 	}
 	return nil
 }
