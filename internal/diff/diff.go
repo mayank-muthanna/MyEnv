@@ -29,14 +29,14 @@ func Compare(rules schema.Schema, values map[string]string, accesses []scanner.A
 		_, inDotenv := values[key]
 		switch {
 		case !inSchema && !inDotenv:
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-env", Message: key + " is used in code but absent from both .env and .myenv.yaml", Path: access.Path, Line: access.Line})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-env", Key: key, Message: key + " is used in code but absent from both .env and .myenv.yaml", Path: access.Path, Line: access.Line})
 		case !inSchema:
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-schema", Message: key + " is used in code but absent from .myenv.yaml", Path: access.Path, Line: access.Line})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-schema", Key: key, Message: key + " is used in code but absent from .myenv.yaml", Path: access.Path, Line: access.Line})
 		case !inDotenv:
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-dotenv", Message: key + " is used in code but absent from .env", Path: access.Path, Line: access.Line})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-dotenv", Key: key, Message: key + " is used in code but absent from .env", Path: access.Path, Line: access.Line})
 		}
 		if inSchema && rule.Secret && access.ClientSide {
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "client-secret-exposure", Message: key + " is secret and must not be referenced through import.meta.env", Path: access.Path, Line: access.Line})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "client-secret-exposure", Key: key, Message: key + " is secret and must not be referenced through import.meta.env", Path: access.Path, Line: access.Line})
 		}
 	}
 
@@ -46,7 +46,7 @@ func Compare(rules schema.Schema, values map[string]string, accesses []scanner.A
 			if _, exists := values[key]; exists {
 				message = key + " exists in both .env and .myenv.yaml but is not statically used in source"
 			}
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Warning, Rule: "unused-config-env", Message: message})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Warning, Rule: "unused-config-env", Key: key, Message: message})
 		}
 	}
 

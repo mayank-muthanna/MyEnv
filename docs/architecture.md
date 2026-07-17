@@ -62,6 +62,7 @@ for numeric types. Defaults participate in validation when a key is absent.
 - `internal/diff` calculates code-minus-schema and code-minus-dotenv errors, plus unused configuration
   warnings. A `secret: true` variable referenced via `import.meta.env` is an
   error because bundlers can expose it to browsers.
+- `internal/ignore` loads optional `.myenvignore.yaml` policy and filters diagnostics by path, rule ID, or environment key.
 - `internal/leaks` scans tracked `.env*` files with a small curated set of
   high-signal credential patterns and never includes matched values in output.
 - `internal/diagnostic` defines a stable severity, rule ID, location, and
@@ -70,7 +71,7 @@ for numeric types. Defaults participate in validation when a key is absent.
 ## Scanning policy
 
 Source scanning includes `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, and `.cjs`.
-It skips `.git`, `node_modules`, `vendor`, and common build directories. The
+It skips `.git`, `node_modules`, `vendor`, common build directories, custom ignore paths, and source files matched by `.gitignore`. The
 scanner only claims static certainty: `process.env[key]` is reported as a
 warning rather than guessed. A schema key unused in static source is a warning;
 a source key absent from `.env` or the schema is an error. A key present in both config files but absent from static source is a warning.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/myenv-cli/myenv/internal/diagnostic"
 	"github.com/myenv-cli/myenv/internal/diff"
+	"github.com/myenv-cli/myenv/internal/ignore"
 	"github.com/myenv-cli/myenv/internal/leaks"
 	"github.com/myenv-cli/myenv/internal/scanner"
 	"github.com/myenv-cli/myenv/internal/schema"
@@ -74,7 +75,7 @@ func validateCommand() *cobra.Command {
 }
 
 func scanCommand() *cobra.Command {
-	var schemaPath, root, envPath, format string
+	var schemaPath, root, envPath, ignorePath, format string
 	command := &cobra.Command{Use: "scan", Short: "Cross-reference code, .env, and .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
 		rules, err := schema.Load(schemaPath)
 		if err != nil {
@@ -83,11 +84,18 @@ func scanCommand() *cobra.Command {
 		if envPath == "" {
 			envPath = filepath.Join(root, ".env")
 		}
+		if ignorePath == "" {
+			ignorePath = filepath.Join(root, ".myenvignore.yaml")
+		}
+		policy, err := ignore.Load(ignorePath)
+		if err != nil {
+			return err
+		}
 		values, err := validate.LoadDotenv(envPath)
 		if err != nil {
 			return err
 		}
-		accesses, diagnostics, err := scanner.Scan(root)
+		accesses, diagnostics, err := scanner.Scan(root, policy)
 		if err != nil {
 			return err
 		}
@@ -98,11 +106,13 @@ func scanCommand() *cobra.Command {
 			return err
 		}
 		diagnostics = append(diagnostics, leakDiagnostics...)
+		diagnostics = policy.Filter(root, diagnostics)
 		return report("scan", diagnostics, format)
 	}}
 	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path")
 	command.Flags().StringVar(&root, "root", ".", "repository root")
 	command.Flags().StringVar(&envPath, "env", "", "dotenv path (defaults to <root>/.env)")
+	command.Flags().StringVar(&ignorePath, "ignore", "", "ignore policy path (defaults to <root>/.myenvignore.yaml)")
 	command.Flags().StringVar(&format, "format", "text", "output format: text or json")
 	return command
 }

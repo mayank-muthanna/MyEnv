@@ -63,12 +63,12 @@ func Env(rules schema.Schema, values map[string]string) []diagnostic.Diagnostic 
 		rule := rules[key]
 		raw, present := values[key]
 		for _, message := range Value(rule, raw, present) {
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "invalid-value", Message: key + " " + message})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "invalid-value", Key: key, Message: key + " " + message})
 		}
 	}
 	for key := range values {
 		if _, ok := rules[key]; !ok {
-			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-dotenv", Message: key + " exists in .env but is absent from .myenv.yaml"})
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-dotenv", Key: key, Message: key + " exists in .env but is absent from .myenv.yaml"})
 		}
 	}
 	return diagnostics

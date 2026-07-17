@@ -197,6 +197,37 @@ Results:
 Dynamic access does not create a false schema declaration. Prefer a direct
 static property access when possible.
 
+## Ignore policy
+
+`scan` loads `<root>/.myenvignore.yaml` when it exists. Override location with
+`--ignore config/myenvignore.yaml`. This affects scan diagnostics only; it does
+not delete or modify source files.
+
+```yaml
+# .myenvignore.yaml
+paths:
+  - .nuxt/              # Skip generated Nuxt output.
+  - scripts/fixtures/   # Skip a local fixture folder.
+rules:
+  - dynamic-env-access  # Hide one diagnostic rule everywhere.
+env:
+  - BETTER_AUTH_SECRET  # Managed in Convex, not local dotenv.
+  - GOOGLE_CLIENT_*
+  - HOQAN_FCM_DRY_RUN
+  - HOQAN_PLATFORM_SUPERADMIN_SECRET_HASH
+  - NODE_ENV
+  - NITRO_*
+```
+
+`paths` accepts root-relative folders/files plus `*` and `**` patterns. A path
+entry skips source scanning inside that path and hides diagnostics at that path.
+`rules` matches diagnostic IDs, such as `dynamic-env-access`; `env` matches
+specific environment keys or patterns. Use `env` only for variables managed by
+another provider, such as Convex deployment environment settings.
+
+Source files ignored by repository `.gitignore` rules are also skipped
+automatically. If Git is unavailable or scan root is not a Git repository,
+myenv continues scanning and relies on `paths` instead.
 ## Secret leak checks
 
 During `scan`, myenv asks Git for tracked `.env*` files. It checks those files
