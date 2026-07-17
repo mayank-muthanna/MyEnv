@@ -19,6 +19,7 @@ import (
 	"github.com/myenv-cli/myenv/internal/schema"
 	"github.com/myenv-cli/myenv/internal/validate"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 )
 
@@ -55,9 +56,122 @@ func rootCommand() *cobra.Command {
 		},
 	}
 	command.AddCommand(validateCommand(), scanCommand(), inferCommand())
+	command.SetHelpFunc(renderHelp)
 	return command
 }
 
+func renderHelp(command *cobra.Command, _ []string) {
+	output := command.OutOrStdout()
+	if command == command.Root() {
+		renderRootHelp(output)
+		return
+	}
+	renderCommandHelp(output, command)
+}
+
+func renderRootHelp(output io.Writer) {
+	section(output, "MYENV", "Environment configuration guardrails")
+	line(output, gray, "Keep code, dotenv files, and .myenv.yaml in sync.")
+	fmt.Fprintln(output)
+	section(output, "START HERE", "Three commands. One normal flow.")
+	step(output, "1", "Create schema", "myenv infer")
+	step(output, "2", "Validate values", "myenv validate")
+	step(output, "3", "Scan project drift", "myenv scan")
+	fmt.Fprintln(output)
+	section(output, "COMMANDS", "What each command checks")
+	helpCommand(output, "infer", "Generate or sync .myenv.yaml from a dotenv file", "--env, --output")
+	helpCommand(output, "validate", "Check dotenv values against schema rules", "--env, --schema, --format")
+	helpCommand(output, "scan", "Cross-reference code, dotenv, and schema", "--root, --env, --schema, --format")
+	fmt.Fprintln(output)
+	section(output, "NEED DETAILS?", "Every command has its own flags and examples")
+	commandExample(output, "myenv help scan")
+	commandExample(output, "myenv validate --help")
+}
+
+func renderCommandHelp(output io.Writer, command *cobra.Command) {
+	title := "MYENV " + strings.ToUpper(command.Name())
+	section(output, title, command.Short)
+	line(output, gray, commandGuidance(command.Name()))
+	fmt.Fprintln(output)
+	section(output, "USAGE", "")
+	commandExample(output, command.UseLine())
+	fmt.Fprintln(output)
+	section(output, "EXAMPLES", "")
+	for _, example := range commandExamples(command.Name()) {
+		commandExample(output, example)
+	}
+	fmt.Fprintln(output)
+	section(output, "FLAGS", "")
+	flags := command.NonInheritedFlags()
+	flags.VisitAll(func(flag *pflag.Flag) {
+		if flag.Name == "help" {
+			return
+		}
+		name := "--" + flag.Name
+		if flag.Shorthand != "" {
+			name = "-" + flag.Shorthand + ", " + name
+		}
+		defaultValue := ""
+		if flag.DefValue != "" && flag.DefValue != "false" {
+			defaultValue = " (default: " + flag.DefValue + ")"
+		}
+		fmt.Fprintf(output, "  %s%-22s%s %s%s%s%s\n", blue, name, reset, flag.Usage, gray, defaultValue, reset)
+	})
+	fmt.Fprintf(output, "  %s%-22s%s %s\n", blue, "-h, --help", reset, "Show this command guide.")
+	fmt.Fprintln(output)
+	line(output, gray, "Tip: use --format json in CI or scripts.")
+}
+
+func commandGuidance(name string) string {
+	switch name {
+	case "infer":
+		return "Use after creating or changing a dotenv file. Existing schemas offer Override, Sync, or Skip."
+	case "validate":
+		return "Use before running your app to catch missing, malformed, or unsafe configuration."
+	case "scan":
+		return "Use in development or CI to find config drift, unused values, and likely committed secrets."
+	default:
+		return "Run this command with the flags below."
+	}
+}
+
+func commandExamples(name string) []string {
+	switch name {
+	case "infer":
+		return []string{"myenv infer --env .env.local", "myenv infer --env .env.local --output config/.myenv.yaml"}
+	case "validate":
+		return []string{"myenv validate --env .env.local", "myenv validate --schema config/.myenv.yaml --env .env.production", "myenv validate --env .env.local --format json"}
+	case "scan":
+		return []string{"myenv scan --root . --env .env.local", "myenv scan --root apps/web --schema config/.myenv.yaml --env apps/web/.env", "myenv scan --env .env.local --format json"}
+	default:
+		return nil
+	}
+}
+
+func section(output io.Writer, title, subtitle string) {
+	fmt.Fprintf(output, "%s%s%s%s", bold, blue, title, reset)
+	if subtitle != "" {
+		fmt.Fprintf(output, "  %s%s%s", gray, subtitle, reset)
+	}
+	fmt.Fprintln(output)
+	fmt.Fprintf(output, "%s------------------------------------------------------------%s\n", gray, reset)
+}
+
+func line(output io.Writer, color, message string) {
+	fmt.Fprintf(output, "%s%s%s\n", color, message, reset)
+}
+
+func step(output io.Writer, number, label, example string) {
+	fmt.Fprintf(output, "  %s%s.%s %-18s %s%s%s\n", bold, number, reset, label, green, example, reset)
+}
+
+func helpCommand(output io.Writer, name, description, flags string) {
+	fmt.Fprintf(output, "  %s%-10s%s %-49s %s%s%s\n", green, name, reset, description, gray, flags, reset)
+}
+
+func commandExample(output io.Writer, example string) {
+	fmt.Fprintf(output, "  %s$%s %s%s%s\n", gray, reset, green, example, reset)
+}
 func validateCommand() *cobra.Command {
 	var schemaPath, envPath, format string
 	command := &cobra.Command{Use: "validate", Short: "Validate a dotenv file against .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
