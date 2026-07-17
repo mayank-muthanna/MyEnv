@@ -13,7 +13,7 @@ before deployment.
 - `validate` checks values against the schema.
 - `scan` checks static JS/TS environment usage against the schema and scans
   tracked `.env*` files for likely committed credentials.
-- `infer` generates a starter schema from `.env`, without copying values.
+- `infer` generates a starter schema from `.env`, without copying values. When a schema exists, its interactive sync option preserves configured rules and ignore policy.
 - Go scanning, Git-history scanning, encryption, hosted secrets, and runtime
   tracing are out of scope for this MVP.
 
@@ -23,7 +23,7 @@ before deployment.
 | --- | --- | --- |
 | `myenv validate` | Load schema and dotenv file, apply type and rule validation. | `1` when any validation error exists. |
 | `myenv scan` | Find static JS/TS env references, compare code, `.env`, and schema keys, and inspect tracked `.env*` files for leaks. | `1` when a hard diagnostic exists. |
-| `myenv infer` | Load `.env`, infer conservative rule types, and write a starter schema. | `1` for input/output failures. |
+| `myenv infer` | Load `.env`, infer conservative rule types, then create, override, sync, or skip the schema through an interactive menu. | `1` for input/output failures or cancelled selection. |
 
 All commands support text diagnostics; `validate` and `scan` also provide JSON
 diagnostics for CI and the GitHub Action.
@@ -92,3 +92,4 @@ Tests cover schema normalization, each validation primitive, source patterns,
 diff policies, redacted leak diagnostics, JSON output, and full CLI fixture
 flows. `testdata/demo` provides intentionally broken and fixed examples for a
 repeatable hackathon demonstration.
+

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,11 +13,13 @@ import (
 	"github.com/myenv-cli/myenv/internal/diagnostic"
 	"github.com/myenv-cli/myenv/internal/diff"
 	"github.com/myenv-cli/myenv/internal/ignore"
+	"github.com/myenv-cli/myenv/internal/infer"
 	"github.com/myenv-cli/myenv/internal/leaks"
 	"github.com/myenv-cli/myenv/internal/scanner"
 	"github.com/myenv-cli/myenv/internal/schema"
 	"github.com/myenv-cli/myenv/internal/validate"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 const (
@@ -113,7 +116,7 @@ func scanCommand() *cobra.Command {
 
 func inferCommand() *cobra.Command {
 	var envPath, output string
-	command := &cobra.Command{Use: "infer", Short: "Generate a starter .myenv.yaml from a dotenv file", RunE: func(command *cobra.Command, arguments []string) error {
+	command := &cobra.Command{Use: "infer", Short: "Generate or sync .myenv.yaml from a dotenv file", RunE: func(command *cobra.Command, arguments []string) error {
 		values, err := validate.LoadDotenv(envPath)
 		if err != nil {
 			return err
@@ -122,14 +125,46 @@ func inferCommand() *cobra.Command {
 		for key, value := range values {
 			rules[key] = schema.Rule{Key: key, Type: inferType(value), Secret: schema.LooksSecretName(key)}
 		}
-		contents, err := schema.Render(rules)
+
+		document := schema.Document{Schema: rules}
+		mode := "created"
+		change := infer.Change{Added: len(rules)}
+		if _, err := os.Stat(output); err == nil {
+			choice, err := chooseInferAction(command.InOrStdin(), command.OutOrStdout(), output)
+			if err != nil {
+				return err
+			}
+			if choice == inferSkip {
+				fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s kept %s unchanged\n", green, reset, output)
+				return nil
+			}
+			if choice == inferSync {
+				existing, err := schema.LoadDocument(output)
+				if err != nil {
+					return err
+				}
+				document = existing
+				document.Schema, change = infer.Merge(existing.Schema, rules)
+				mode = "synced"
+			} else {
+				mode = "overrode"
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+
+		contents, err := schema.RenderDocument(document)
 		if err != nil {
 			return err
 		}
 		if err := os.WriteFile(output, contents, 0644); err != nil {
 			return err
 		}
-		fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s created %s from %s\n", green, reset, output, envPath)
+		if mode == "synced" {
+			fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s synced %s from %s %s(%d added, %d removed, %d preserved)%s\n", green, reset, output, envPath, gray, change.Added, change.Removed, change.Preserved, reset)
+		} else {
+			fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s %s %s from %s\n", green, reset, mode, output, envPath)
+		}
 		return nil
 	}}
 	command.Flags().StringVar(&envPath, "env", ".env", "dotenv path")
@@ -137,6 +172,75 @@ func inferCommand() *cobra.Command {
 	return command
 }
 
+type inferAction int
+
+const (
+	inferOverride inferAction = iota
+	inferSync
+	inferSkip
+)
+
+var inferActions = []string{
+	"Override current schema completely",
+	"Sync additions and removals; preserve existing rule settings",
+	"Skip; keep current schema unchanged",
+}
+
+func chooseInferAction(input io.Reader, output io.Writer, path string) (inferAction, error) {
+	file, isFile := input.(*os.File)
+	if !isFile || !term.IsTerminal(int(file.Fd())) {
+		return inferSkip, fmt.Errorf("%s already exists; run infer in an interactive terminal to choose override, sync, or skip", path)
+	}
+	oldState, err := term.MakeRaw(int(file.Fd()))
+	if err != nil {
+		return inferSkip, fmt.Errorf("enable interactive input: %w", err)
+	}
+	defer term.Restore(int(file.Fd()), oldState)
+
+	selected := 1
+	renderInferMenu(output, path, selected)
+	buffer := make([]byte, 1)
+	for {
+		if _, err := file.Read(buffer); err != nil {
+			return inferSkip, err
+		}
+		switch buffer[0] {
+		case 3:
+			return inferSkip, fmt.Errorf("selection cancelled")
+		case '\r', '\n':
+			return inferAction(selected), nil
+		case ' ':
+			selected = (selected + 1) % len(inferActions)
+			renderInferMenu(output, path, selected)
+		case 27:
+			sequence := make([]byte, 2)
+			if _, err := io.ReadFull(file, sequence); err != nil || sequence[0] != '[' {
+				continue
+			}
+			if sequence[1] == 'A' {
+				selected = (selected + len(inferActions) - 1) % len(inferActions)
+				renderInferMenu(output, path, selected)
+			}
+			if sequence[1] == 'B' {
+				selected = (selected + 1) % len(inferActions)
+				renderInferMenu(output, path, selected)
+			}
+		}
+	}
+}
+
+func renderInferMenu(output io.Writer, path string, selected int) {
+	fmt.Fprint(output, "\033[2J\033[H")
+	fmt.Fprintf(output, "%s%sMYENV INFER%s\n%s%s already exists. Choose action:%s\n\n", bold, blue, reset, gray, path, reset)
+	for index, action := range inferActions {
+		marker, color := "[ ]", gray
+		if index == selected {
+			marker, color = "[x]", blue
+		}
+		fmt.Fprintf(output, "%s%s %s%s\n", color, marker, action, reset)
+	}
+	fmt.Fprintf(output, "\n%sUp/down arrows or Space: move. Enter: select. Ctrl+C: cancel.%s", gray, reset)
+}
 func inferType(value string) string {
 	if _, err := strconv.ParseBool(value); err == nil {
 		return "bool"

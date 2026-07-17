@@ -152,15 +152,31 @@ func (schema Schema) Keys() []string {
 }
 
 func Render(rules Schema) ([]byte, error) {
-	raw := make(map[string]RawRule, len(rules))
-	for key, rule := range rules {
+	return RenderDocument(Document{Schema: rules})
+}
+
+func RenderDocument(document Document) ([]byte, error) {
+	nodes := make(map[string]any, len(document.Schema)+4)
+	if len(document.IgnoreCode) > 0 {
+		nodes["ignoreCode"] = document.IgnoreCode
+	}
+	if len(document.IgnoreUnused) > 0 {
+		nodes["ignoreUnused"] = document.IgnoreUnused
+	}
+	if len(document.IgnorePaths) > 0 {
+		nodes["ignorePaths"] = document.IgnorePaths
+	}
+	if len(document.IgnoreRules) > 0 {
+		nodes["ignoreRules"] = document.IgnoreRules
+	}
+	for key, rule := range document.Schema {
 		pattern := ""
 		if rule.Pattern != nil {
 			pattern = rule.Pattern.String()
 		}
-		raw[key] = RawRule{Type: rule.Type, Required: rule.Required, Default: rule.Default, Pattern: pattern, Range: rule.Range, Secret: rule.Secret}
+		nodes[key] = RawRule{Type: rule.Type, Required: rule.Required, Default: rule.Default, Pattern: pattern, Range: rule.Range, Secret: rule.Secret}
 	}
-	contents, err := yaml.Marshal(raw)
+	contents, err := yaml.Marshal(nodes)
 	if err != nil {
 		return nil, err
 	}

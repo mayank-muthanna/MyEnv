@@ -332,3 +332,4 @@ clean result.
 Current scanner is static and JS/TS-only. It cannot resolve dynamic variable
 names or prove runtime-only configuration paths. It is not a secret manager,
 encryption layer, Git-history scanner, or runtime tracing system.
+

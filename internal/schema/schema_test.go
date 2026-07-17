@@ -51,3 +51,23 @@ func TestRenderIncludesCommentedIgnoreTemplate(t *testing.T) {
 		t.Fatalf("rendered schema must parse: %v", err)
 	}
 }
+
+func TestRenderDocumentPreservesIgnorePolicy(t *testing.T) {
+	contents, err := RenderDocument(Document{
+		Schema:       Schema{"PORT": {Key: "PORT", Type: "int"}},
+		IgnoreCode:   []string{"DEPLOYMENT_SECRET"},
+		IgnoreUnused: []string{"DEPLOYMENT_ONLY_SETTING"},
+		IgnorePaths:  []string{".nuxt/"},
+		IgnoreRules:  []string{"dynamic-env-access"},
+	})
+	if err != nil {
+		t.Fatalf("render document: %v", err)
+	}
+	document, err := ParseDocument(contents)
+	if err != nil {
+		t.Fatalf("parse rendered document: %v", err)
+	}
+	if len(document.IgnoreCode) != 1 || document.IgnoreCode[0] != "DEPLOYMENT_SECRET" || len(document.IgnorePaths) != 1 || document.IgnorePaths[0] != ".nuxt/" {
+		t.Fatalf("ignore policy lost: %#v", document)
+	}
+}
