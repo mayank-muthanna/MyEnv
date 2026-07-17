@@ -42,8 +42,10 @@ func TestRenderIncludesCommentedIgnoreTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(contents), "# ignoreCode:") || !strings.Contains(string(contents), "# ignoreUnused:") {
-		t.Fatalf("missing ignore template: %s", contents)
+	for _, expected := range []string{"# pattern: '^sk_(live|test)_[A-Za-z0-9]{24,}$'", "# Add pattern: '...'", "# ignoreCode:", "# ignoreUnused:"} {
+		if !strings.Contains(string(contents), expected) {
+			t.Fatalf("missing generated template content %q: %s", expected, contents)
+		}
 	}
 	if _, err := Parse(contents); err != nil {
 		t.Fatalf("rendered schema must parse: %v", err)

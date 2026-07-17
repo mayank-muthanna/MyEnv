@@ -167,7 +167,13 @@ func Render(rules Schema) ([]byte, error) {
 	return append([]byte(inferIgnoreTemplate), contents...), nil
 }
 
-const inferIgnoreTemplate = `# Optional scan ignore policy. Uncomment only entries you need.
+const inferIgnoreTemplate = `# Pattern guide (Go/RE2 regular expressions; pattern checks whole value only when you use ^ and $).
+# pattern: '^sk_(live|test)_[A-Za-z0-9]{24,}$' # ^ start, $ end, (...) choose one, [A-Za-z0-9] allowed chars, {24,} 24+ chars.
+# Examples: '^https://.+$' = URL starting https; '^[0-9]{4}$' = exactly four digits; '^(dev|staging|prod)$' = one allowed value.
+# Escape regex symbols when literal: '\.' matches a dot; use single quotes so YAML keeps backslashes unchanged.
+# Add pattern: '...' under any environment variable. Remove it when any string value is valid.
+#
+# Optional scan ignore policy. Uncomment only entries you need.
 # ignorePaths:
 #   - .nuxt/
 # ignoreRules:
