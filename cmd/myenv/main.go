@@ -67,9 +67,16 @@ func validateCommand() *cobra.Command {
 }
 
 func scanCommand() *cobra.Command {
-	var schemaPath, root, format string
-	command := &cobra.Command{Use: "scan", Short: "Cross-reference source environment usage with .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
+	var schemaPath, root, envPath, format string
+	command := &cobra.Command{Use: "scan", Short: "Cross-reference code, .env, and .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {
 		rules, err := schema.Load(schemaPath)
+		if err != nil {
+			return err
+		}
+		if envPath == "" {
+			envPath = filepath.Join(root, ".env")
+		}
+		values, err := validate.LoadDotenv(envPath)
 		if err != nil {
 			return err
 		}
@@ -77,7 +84,8 @@ func scanCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		diagnostics = append(diagnostics, diff.Compare(rules, accesses)...)
+		diagnostics = append(validate.Env(rules, values), diagnostics...)
+		diagnostics = append(diagnostics, diff.Compare(rules, values, accesses)...)
 		leakDiagnostics, err := leaks.ScanTracked(root)
 		if err != nil {
 			return err
@@ -87,6 +95,7 @@ func scanCommand() *cobra.Command {
 	}}
 	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path")
 	command.Flags().StringVar(&root, "root", ".", "repository root")
+	command.Flags().StringVar(&envPath, "env", "", "dotenv path (defaults to <root>/.env)")
 	command.Flags().StringVar(&format, "format", "text", "output format: text or json")
 	return command
 }
@@ -109,7 +118,7 @@ func inferCommand() *cobra.Command {
 		if err := os.WriteFile(output, contents, 0644); err != nil {
 			return err
 		}
-		fmt.Fprintf(command.OutOrStdout(), "%sÃ¢Å“â€œ%s created %s from %s\n", green, reset, output, envPath)
+		fmt.Fprintf(command.OutOrStdout(), "%s[PASS]%s created %s from %s\n", green, reset, output, envPath)
 		return nil
 	}}
 	command.Flags().StringVar(&envPath, "env", ".env", "dotenv path")
@@ -141,7 +150,7 @@ func report(diagnostics []diagnostic.Diagnostic, format string) error {
 			return err
 		}
 	} else if len(diagnostics) == 0 {
-		fmt.Printf("%sÃ¢Å“â€œ%s no issues found\n", green, reset)
+		fmt.Printf("%s[PASS]%s no issues found\n", green, reset)
 	} else {
 		for _, item := range diagnostics {
 			location := ""
@@ -152,9 +161,9 @@ func report(diagnostics []diagnostic.Diagnostic, format string) error {
 				}
 				location += ": "
 			}
-			marker, color := "Ã¢Å¡Â ", yellow
+			marker, color := "[WARN]", yellow
 			if item.IsError() {
-				marker, color = "Ã¢Å“â€”", red
+				marker, color = "[ERROR]", red
 			}
 			fmt.Printf("%s%s%s %s[%s] %s\n", color, marker, reset, location, item.Rule, item.Message)
 		}

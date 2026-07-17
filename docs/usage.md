@@ -143,18 +143,18 @@ Validation reports errors and exits `1` when:
 Example failure:
 
 ```text
-✗ [invalid-value] PORT must be at most 65535
+[ERROR] [invalid-value] PORT must be at most 65535
 ```
 
 Fix source value or schema rule, then rerun the command.
 
 ### `myenv scan`
 
-Cross-reference static source usage and schema:
+Cross-reference static source usage, `.env`, and schema:
 
 ```powershell
 go run ./cmd/myenv scan
-go run ./cmd/myenv scan --root . --schema .myenv.yaml
+go run ./cmd/myenv scan --root . --schema .myenv.yaml --env .env
 go run ./cmd/myenv scan --format json
 ```
 
@@ -170,6 +170,12 @@ import.meta.env.VITE_API_URL
 `.git`, `node_modules`, `vendor`, `dist`, `build`, `.next`, and `coverage`.
 
 Results:
+
+- **Error:** a code variable is missing from `.env`, `.myenv.yaml`, or both.
+- **Error:** `.env` contains a variable absent from `.myenv.yaml`.
+- **Warning:** a variable present in both config files is unused by static source.
+
+### Examples:
 
 - **Error:** code uses `process.env.NEW_FLAG`, but `NEW_FLAG` is missing from
   `.myenv.yaml`.
@@ -256,7 +262,7 @@ go run ./cmd/myenv validate `
 
 go run ./cmd/myenv scan `
   --schema testdata/demo/.myenv.yaml `
-  --root testdata/demo
+  --env testdata/demo/.env `r`n  --root testdata/demo
 ```
 
 Failures are expected. Demo includes invalid `PORT`, invalid Stripe format,

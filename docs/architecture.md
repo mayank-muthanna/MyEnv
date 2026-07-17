@@ -22,7 +22,7 @@ before deployment.
 | Command | Responsibility | Exit status |
 | --- | --- | --- |
 | `myenv validate` | Load schema and dotenv file, apply type and rule validation. | `1` when any validation error exists. |
-| `myenv scan` | Find static JS/TS env references, compare them with schema keys, and inspect tracked `.env*` files for leaks. | `1` when a hard diagnostic exists. |
+| `myenv scan` | Find static JS/TS env references, compare code, `.env`, and schema keys, and inspect tracked `.env*` files for leaks. | `1` when a hard diagnostic exists. |
 | `myenv infer` | Load `.env`, infer conservative rule types, and write a starter schema. | `1` for input/output failures. |
 
 All commands support text diagnostics; `validate` and `scan` also provide JSON
@@ -59,7 +59,7 @@ for numeric types. Defaults participate in validation when a key is absent.
 - `internal/scanner` walks source files and recognizes static
   `process.env.NAME`, `process.env["NAME"]`, and `import.meta.env.NAME`
   references with file and line locations. Dynamic accesses emit warnings.
-- `internal/diff` calculates code-minus-schema errors and schema-minus-code
+- `internal/diff` calculates code-minus-schema and code-minus-dotenv errors, plus unused configuration
   warnings. A `secret: true` variable referenced via `import.meta.env` is an
   error because bundlers can expose it to browsers.
 - `internal/leaks` scans tracked `.env*` files with a small curated set of
@@ -73,7 +73,7 @@ Source scanning includes `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, and `.cjs`.
 It skips `.git`, `node_modules`, `vendor`, and common build directories. The
 scanner only claims static certainty: `process.env[key]` is reported as a
 warning rather than guessed. A schema key unused in static source is a warning;
-a source key absent from the schema is an error.
+a source key absent from `.env` or the schema is an error. A key present in both config files but absent from static source is a warning.
 
 Leak scanning uses `git ls-files` when available, so ignored local `.env` files
 are not falsely treated as committed leaks. It scans tracked `.env*` files,
