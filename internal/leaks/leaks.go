@@ -42,7 +42,7 @@ func ScanTracked(root string) ([]diagnostic.Diagnostic, error) {
 			line++
 			for _, signature := range signatures {
 				if signature.pattern.MatchString(scanner.Text()) {
-					diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "likely-secret-" + signature.name, Message: "likely committed " + signature.name + "; replace it with a placeholder", Path: path, Line: line})
+					diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Warning, Rule: "likely-secret-" + signature.name, Message: "likely committed " + signature.name + "; replace it with a placeholder", Path: path, Line: line})
 				}
 			}
 		}
