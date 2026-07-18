@@ -19,7 +19,8 @@ jobs:
         shell: bash
         env:
           MYENV_DECRYPT_KEY: ${{ secrets.MYENV_DECRYPT_KEY }}
-        run: test -n "$MYENV_DECRYPT_KEY"      - uses: ./
+        run: test -n "$MYENV_DECRYPT_KEY"
+      - uses: ./
         with:
           root: testdata/demoCI/pass
           schema: testdata/demoCI/pass/.myenv.yaml
@@ -34,6 +35,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: verify demo key
+        shell: bash
+        env:
+          MYENV_DECRYPT_KEY: ${{ secrets.MYENV_DECRYPT_KEY }}
+        run: test -n "$MYENV_DECRYPT_KEY"
       - id: run_demo
         continue-on-error: true
         uses: ./
