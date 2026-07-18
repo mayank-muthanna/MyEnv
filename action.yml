@@ -1,0 +1,36 @@
+name: myenv
+description: Check code/schema drift and optionally validate encrypted dotenv values
+inputs:
+  schema:
+    description: Path to .myenv.yaml
+    required: false
+    default: .myenv.yaml
+  root:
+    description: Repository root to scan
+    required: false
+    default: .
+  key-env:
+    description: Environment variable containing encryptedEnv decryption key
+    required: false
+    default: MYENV_DECRYPT_KEY
+runs:
+  using: composite
+  steps:
+    - id: ci
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -o pipefail
+        go run "$GITHUB_ACTION_PATH/cmd/myenv" ci \
+          --schema "${{ inputs.schema }}" \
+          --root "${{ inputs.root }}" \
+          --key-env "${{ inputs.key-env }}" \
+          --format json | tee myenv-ci.json
+    - if: always()
+      shell: bash
+      run: |
+        echo "## myenv" >> "$GITHUB_STEP_SUMMARY"
+        echo "Code/schema checks ran. Encrypted dotenv values were validated only when the configured key environment variable was available." >> "$GITHUB_STEP_SUMMARY"
+    - if: steps.ci.outcome == 'failure'
+      shell: bash
+      run: exit 1

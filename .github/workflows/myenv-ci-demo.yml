@@ -1,0 +1,49 @@
+name: myenv CI demo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pass_fixture:
+    name: pass fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: verify demo key
+        shell: bash
+        env:
+          MYENV_DECRYPT_KEY: ${{ secrets.MYENV_DECRYPT_KEY }}
+        run: test -n "$MYENV_DECRYPT_KEY"      - uses: ./
+        with:
+          root: testdata/demoCI/pass
+          schema: testdata/demoCI/pass/.myenv.yaml
+        env:
+          MYENV_DECRYPT_KEY: ${{ secrets.MYENV_DECRYPT_KEY }}
+
+  expected_fail_fixture:
+    name: expected fail fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: run_demo
+        continue-on-error: true
+        uses: ./
+        with:
+          root: testdata/demoCI/fail
+          schema: testdata/demoCI/fail/.myenv.yaml
+        env:
+          MYENV_DECRYPT_KEY: ${{ secrets.MYENV_DECRYPT_KEY }}
+      - if: steps.run_demo.outcome != 'failure'
+        shell: bash
+        run: |
+          echo "Fail fixture unexpectedly passed. Check MYENV_DECRYPT_KEY exists."
+          exit 1
