@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/myenv-cli/myenv/internal/diagnostic"
 	"github.com/myenv-cli/myenv/internal/envcrypt"
 	"github.com/myenv-cli/myenv/internal/schema"
 )
@@ -102,5 +103,12 @@ func TestCICommandChecksCodeAndEncryptedValuesInMemory(t *testing.T) {
 	invalidCommand.SetArgs([]string{"--schema", schemaPath, "--root", temporaryDirectory})
 	if err := invalidCommand.Execute(); !errors.Is(err, errChecksFailed) {
 		t.Fatalf("expected encrypted dotenv validation failure, got %v", err)
+	}
+}
+
+func TestReportJSONFailsWhenDiagnosticsContainErrors(t *testing.T) {
+	diagnostics := []diagnostic.Diagnostic{{Severity: diagnostic.Error, Rule: "test-error", Message: "expected failure"}}
+	if err := report("ci", diagnostics, "json"); !errors.Is(err, errChecksFailed) {
+		t.Fatalf("expected JSON report failure, got %v", err)
 	}
 }

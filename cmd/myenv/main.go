@@ -529,6 +529,12 @@ func report(commandName string, diagnostics []diagnostic.Diagnostic, format stri
 		if err := encoder.Encode(diagnostics); err != nil {
 			return err
 		}
+		for _, item := range diagnostics {
+			if item.IsError() {
+				return errChecksFailed
+			}
+		}
+		return nil
 	} else if len(diagnostics) == 0 {
 		fmt.Printf("%s%s[PASS]%s %s%s completed with no issues.%s\n", bold, green, reset, gray, strings.ToUpper(commandName), reset)
 	} else {
