@@ -1,0 +1,17 @@
+{
+    "name":  "@mayank_muthanna/myenv-darwin-arm64",
+    "version":  "0.1.1",
+    "description":  "myenv binary for darwin-arm64",
+    "os":  [
+               "darwin"
+           ],
+    "cpu":  [
+                "arm64"
+            ],
+    "files":  [
+                  "bin/myenv"
+              ],
+    "publishConfig":  {
+                          "access":  "public"
+                      }
+}

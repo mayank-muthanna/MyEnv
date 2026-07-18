@@ -1,0 +1,17 @@
+{
+    "name":  "@mayank_muthanna/myenv-linux-x64",
+    "version":  "0.1.1",
+    "description":  "myenv binary for linux-x64",
+    "os":  [
+               "linux"
+           ],
+    "cpu":  [
+                "x64"
+            ],
+    "files":  [
+                  "bin/myenv"
+              ],
+    "publishConfig":  {
+                          "access":  "public"
+                      }
+}

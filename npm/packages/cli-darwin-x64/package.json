@@ -1,0 +1,17 @@
+{
+    "name":  "@mayank_muthanna/myenv-darwin-x64",
+    "version":  "0.1.1",
+    "description":  "myenv binary for darwin-x64",
+    "os":  [
+               "darwin"
+           ],
+    "cpu":  [
+                "x64"
+            ],
+    "files":  [
+                  "bin/myenv"
+              ],
+    "publishConfig":  {
+                          "access":  "public"
+                      }
+}

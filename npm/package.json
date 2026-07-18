@@ -1,0 +1,17 @@
+{
+    "name":  "myenv-npm-workspace",
+    "private":  true,
+    "version":  "0.1.1",
+    "workspaces":  [
+                       "packages/*"
+                   ],
+    "scripts":  {
+                    "build:binaries":  "node scripts/build-platform-binaries.mjs",
+                    "test":  "node --test packages/cli/test/*.test.cjs",
+                    "verify":  "npm run test \u0026\u0026 node scripts/verify-packages.mjs",
+                    "pack:all":  "npm run build:binaries \u0026\u0026 npm run verify \u0026\u0026 npm pack --workspaces"
+                },
+    "engines":  {
+                    "node":  "\u003e=18"
+                }
+}

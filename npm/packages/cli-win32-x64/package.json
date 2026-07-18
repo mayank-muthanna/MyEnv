@@ -1,0 +1,17 @@
+{
+    "name":  "@mayank_muthanna/myenv-win32-x64",
+    "version":  "0.1.1",
+    "description":  "myenv binary for win32-x64",
+    "os":  [
+               "win32"
+           ],
+    "cpu":  [
+                "x64"
+            ],
+    "files":  [
+                  "bin/myenv.exe"
+              ],
+    "publishConfig":  {
+                          "access":  "public"
+                      }
+}

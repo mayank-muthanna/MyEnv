@@ -1,0 +1,4 @@
+node_modules/
+*.tgz
+packages/*/bin/myenv
+packages/*/bin/myenv.exe

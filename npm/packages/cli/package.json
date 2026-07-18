@@ -1,0 +1,26 @@
+{
+    "name":  "@mayank_muthanna/myenv",
+    "version":  "0.1.1",
+    "description":  "Cross-platform CLI launcher for myenv",
+    "bin":  {
+                "myenv":  "bin/myenv.cjs"
+            },
+    "files":  [
+                  "bin",
+                  "lib",
+                  "README.md"
+              ],
+    "optionalDependencies":  {
+                                 "@mayank_muthanna/myenv-win32-x64":  "0.1.1",
+                                 "@mayank_muthanna/myenv-darwin-arm64":  "0.1.1",
+                                 "@mayank_muthanna/myenv-darwin-x64":  "0.1.1",
+                                 "@mayank_muthanna/myenv-linux-x64":  "0.1.1",
+                                 "@mayank_muthanna/myenv-linux-arm64":  "0.1.1"
+                             },
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "publishConfig":  {
+                          "access":  "public"
+                      }
+}
