@@ -25,7 +25,7 @@ before deployment.
 | `myenv scan` | Find static JS/TS env references, compare code, `.env`, and schema keys, and inspect tracked `.env*` files for leaks. | `1` when a hard diagnostic exists. |
 | `myenv infer` | Load `.env`, infer conservative rule types, then create, override, sync, or skip the schema through an interactive menu. | `1` for input/output failures or cancelled selection. |
 | `myenv encrypt` | Gzip-compress raw dotenv bytes, encrypt them with AES-256-GCM, and save `encryptedEnv` last in the schema file. | `1` for input, schema, key, or write failures. |
-| `myenv decrypt` | Authenticate, decrypt, and decompress `encryptedEnv` to a chosen dotenv output path. | `1` for missing/wrong key, altered data, or output failure. |
+| `myenv decrypt` | Authenticate, decrypt, and decompress `encryptedEnv` to a chosen dotenv output path. | `1` for missing/wrong key, altered data, or output failure. |`r`n| `myenv ci` | Always compare static code with schema; when `MYENV_DECRYPT_KEY` and `encryptedEnv` exist, decrypt dotenv bytes in memory and validate them. | `1` for code/schema or encrypted dotenv validation errors. |
 
 All commands support text diagnostics; `validate` and `scan` also provide JSON
 diagnostics for CI and the GitHub Action.
@@ -101,10 +101,19 @@ especially `.env.example`, for Stripe, AWS, Slack, and private-key signatures.
 
 ## CI integration
 
-The GitHub Action is a thin wrapper around the CLI: it runs `validate` and
-`scan --format json`, fails on CLI errors, writes a job summary, and comments a
-short result on pull requests. It contains no duplicate validation logic.
+`myenv ci` is CI-specific orchestration with no duplicate validation engine:
 
+- It always calls scanner plus code/schema diff logic.
+- It reads `MYENV_DECRYPT_KEY` only when workflow provides it.
+- If both that key and `encryptedEnv` exist, it authenticates, decrypts, and
+  parses dotenv bytes in memory, then reuses normal validation rules.
+- It never writes decrypted bytes to disk or prints their contents.
+
+`action.yml` invokes `myenv ci` and requires only `contents: read`. Fork pull
+requests without secrets still receive code/schema results. Trusted workflows
+may map `${{ secrets.MYENV_DECRYPT_KEY }}` into the action environment for
+value validation. The action intentionally does not run application scripts or
+need pull-request write permission.
 ## Verification
 
 Tests cover schema normalization, each validation primitive, source patterns,

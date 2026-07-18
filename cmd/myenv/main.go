@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,7 +57,7 @@ func rootCommand() *cobra.Command {
 			fmt.Fprintln(command.OutOrStdout(), "myenv checks environment configuration. Run 'myenv help' for commands and flags.")
 		},
 	}
-	command.AddCommand(validateCommand(), scanCommand(), inferCommand(), encryptCommand(), decryptCommand())
+	command.AddCommand(validateCommand(), scanCommand(), ciCommand(), inferCommand(), encryptCommand(), decryptCommand())
 	command.SetHelpFunc(renderHelp)
 	return command
 }
@@ -86,10 +87,14 @@ func renderRootHelp(output io.Writer) {
 	helpCommand(output, "encrypt", "Compress and encrypt a dotenv file into schema", "--env, --schema, --key")
 	helpCommand(output, "decrypt", "Restore encrypted dotenv with its key", "--schema, --key, --output")
 	fmt.Fprintln(output)
+	section(output, "CI AUTOMATION", "Safe GitHub Actions checks")
+	helpCommand(output, "ci", "Check code vs schema; validate encrypted values when key exists", "--root, --schema, --key-env, --format")
+	fmt.Fprintln(output)
 	section(output, "NEED DETAILS?", "Every command has its own flags and examples")
 	commandExample(output, "myenv help encrypt")
 	commandExample(output, "myenv help scan")
 	commandExample(output, "myenv validate --help")
+	commandExample(output, "myenv help ci")
 }
 
 func renderCommandHelp(output io.Writer, command *cobra.Command) {
@@ -138,6 +143,8 @@ func commandGuidance(name string) string {
 		return "Use to store a compressed, encrypted dotenv payload inside .myenv.yaml. Save printed key outside repository."
 	case "decrypt":
 		return "Use saved encryption key to restore encryptedEnv. Existing output files require --force."
+	case "ci":
+		return "Always checks code against schema. If MYENV_DECRYPT_KEY exists and encryptedEnv is present, decrypts only in memory and validates values."
 	default:
 		return "Run this command with the flags below."
 	}
@@ -155,6 +162,8 @@ func commandExamples(name string) []string {
 		return []string{"myenv encrypt", "myenv encrypt --env .env.local", "myenv encrypt --key <base64url-32-byte-key>"}
 	case "decrypt":
 		return []string{"myenv decrypt --key <saved-key>", "myenv decrypt --key <saved-key> --output .env --force"}
+	case "ci":
+		return []string{"myenv ci", "myenv ci --root . --schema .myenv.yaml", "myenv ci --key-env MYENV_DECRYPT_KEY --format json"}
 	default:
 		return nil
 	}
@@ -239,6 +248,48 @@ func scanCommand() *cobra.Command {
 	return command
 }
 
+func ciCommand() *cobra.Command {
+	var schemaPath, root, keyEnvironment, format string
+	command := &cobra.Command{Use: "ci", Short: "Run safe CI schema and encrypted-value checks", RunE: func(command *cobra.Command, arguments []string) error {
+		document, err := schema.LoadDocument(schemaPath)
+		if err != nil {
+			return err
+		}
+		policy := ignore.Config{Code: document.IgnoreCode, Unused: document.IgnoreUnused, Paths: document.IgnorePaths, Rules: document.IgnoreRules}
+		accesses, diagnostics, err := scanner.Scan(root, policy)
+		if err != nil {
+			return err
+		}
+		diagnostics = append(diagnostics, diff.CompareCodeSchema(document.Schema, accesses)...)
+
+		if encodedKey, exists := os.LookupEnv(keyEnvironment); exists && encodedKey != "" {
+			if document.EncryptedEnv == nil {
+				diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Warning, Rule: "ci-encrypted-env-missing", Message: keyEnvironment + " is available but .myenv.yaml has no encryptedEnv payload"})
+			} else {
+				key, err := envcrypt.ParseKey(encodedKey)
+				if err != nil {
+					return fmt.Errorf("%s is invalid: %w", keyEnvironment, err)
+				}
+				plaintext, err := envcrypt.Decrypt(document.EncryptedEnv, key)
+				if err != nil {
+					return err
+				}
+				values, err := validate.ParseDotenv(bytes.NewReader(plaintext))
+				if err != nil {
+					return fmt.Errorf("parse decrypted dotenv: %w", err)
+				}
+				diagnostics = append(diagnostics, validate.Env(document.Schema, values)...)
+			}
+		}
+		diagnostics = policy.Filter(root, diagnostics)
+		return report("ci", diagnostics, format)
+	}}
+	command.Flags().StringVar(&schemaPath, "schema", ".myenv.yaml", "schema path")
+	command.Flags().StringVar(&root, "root", ".", "repository root")
+	command.Flags().StringVar(&keyEnvironment, "key-env", "MYENV_DECRYPT_KEY", "environment variable holding encryptedEnv key")
+	command.Flags().StringVar(&format, "format", "text", "output format: text or json")
+	return command
+}
 func encryptCommand() *cobra.Command {
 	var schemaPath, envPath, encodedKey string
 	command := &cobra.Command{Use: "encrypt", Short: "Compress and encrypt a dotenv file into .myenv.yaml", RunE: func(command *cobra.Command, arguments []string) error {

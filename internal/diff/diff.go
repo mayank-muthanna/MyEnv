@@ -8,19 +8,51 @@ import (
 	"github.com/myenv-cli/myenv/internal/schema"
 )
 
-func Compare(rules schema.Schema, values map[string]string, accesses []scanner.Access) []diagnostic.Diagnostic {
+func CompareCodeSchema(rules schema.Schema, accesses []scanner.Access) []diagnostic.Diagnostic {
+	used := firstAccesses(accesses)
+	keys := sortedAccessKeys(used)
+
+	var diagnostics []diagnostic.Diagnostic
+	for _, key := range keys {
+		access := used[key]
+		rule, inSchema := rules[key]
+		if !inSchema {
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "undeclared-code-schema", Key: key, Message: key + " is used in code but absent from .myenv.yaml", Path: access.Path, Line: access.Line})
+			continue
+		}
+		if rule.Secret && access.ClientSide {
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Error, Rule: "client-secret-exposure", Key: key, Message: key + " is secret and must not be referenced through import.meta.env", Path: access.Path, Line: access.Line})
+		}
+	}
+	for _, key := range rules.Keys() {
+		if _, exists := used[key]; !exists {
+			diagnostics = append(diagnostics, diagnostic.Diagnostic{Severity: diagnostic.Warning, Rule: "unused-config-env", Key: key, Message: key + " is declared in .myenv.yaml but not statically used in source"})
+		}
+	}
+	return diagnostics
+}
+
+func firstAccesses(accesses []scanner.Access) map[string]scanner.Access {
 	used := map[string]scanner.Access{}
 	for _, access := range accesses {
 		if _, exists := used[access.Key]; !exists {
 			used[access.Key] = access
 		}
 	}
+	return used
+}
 
-	keys := make([]string, 0, len(used))
-	for key := range used {
+func sortedAccessKeys(accesses map[string]scanner.Access) []string {
+	keys := make([]string, 0, len(accesses))
+	for key := range accesses {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	return keys
+}
+func Compare(rules schema.Schema, values map[string]string, accesses []scanner.Access) []diagnostic.Diagnostic {
+	used := firstAccesses(accesses)
+	keys := sortedAccessKeys(used)
 
 	var diagnostics []diagnostic.Diagnostic
 	for _, key := range keys {

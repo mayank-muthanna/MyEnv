@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +13,8 @@ import (
 )
 
 func LoadDotenv(path string) (map[string]string, error) { return godotenv.Read(path) }
+
+func ParseDotenv(input io.Reader) (map[string]string, error) { return godotenv.Parse(input) }
 
 func Value(rule schema.Rule, raw string, present bool) []string {
 	if !present {

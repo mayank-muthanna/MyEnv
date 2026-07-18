@@ -294,40 +294,56 @@ STRIPE_SECRET_KEY=sk_live_123456789012345678901234
 
 ## CI and GitHub Actions
 
-Run both checks in any CI system:
+Use `myenv ci` for automation. It has two safe modes:
+
+1. **Always:** scans static code against `.myenv.yaml`. Missing schema
+   declarations fail; unused declarations and dynamic access warn.
+2. **Only when a key exists:** reads `MYENV_DECRYPT_KEY`, decrypts the committed
+   `encryptedEnv` payload **in memory**, then validates its dotenv values against
+   `.myenv.yaml`. It never creates or prints a plaintext dotenv file.
 
 ```sh
-myenv validate --format json
-myenv scan --format json
+# No key required. Code versus schema only.
+myenv ci --root . --schema .myenv.yaml
+
+# Key available. Adds encrypted dotenv-value validation.
+MYENV_DECRYPT_KEY=<saved-key> myenv ci --root . --schema .myenv.yaml
 ```
 
-Both commands return exit code `1` if an error exists, making them suitable for
-blocking a pull request. Warnings do not fail the command.
-
-This repository also includes a composite GitHub Action in `action.yml`. When
-published, use its `owner/repository@ref`. For local development, reference
-the repository root:
+The included composite action runs this command. Give it only read permission:
 
 ```yaml
 name: Environment contract
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   myenv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./
+      - uses: owner/myenv@<pinned-release-or-commit>
+        with:
+          schema: .myenv.yaml
+          root: .
+        env:
+          MYENV_DECRYPT_KEY: ${{ secrets.MYENV_DECRYPT_KEY }}
 ```
 
-The action runs validation and scanning, writes a workflow summary, and updates
-a marker-based pull-request comment. `pull-requests: write` is required only
-for that comment; remove it if summary-only output is preferred.
+If `MYENV_DECRYPT_KEY` is unavailable, including on pull requests from forks,
+the action still completes code/schema checks. GitHub does not expose repository
+secrets to forked pull requests; this is intentional.
 
+**Security rules:** use a pinned trusted myenv release/commit; never run project
+scripts, package installs, or code built from an untrusted pull request in the
+same job holding `MYENV_DECRYPT_KEY`; never use `pull_request_target` to check
+out untrusted PR code. The command does not write a decrypted file, so no cleanup
+step is needed. GitHub hosted runners are also discarded after the job.
 ## Test current implementation
 
 Run all unit tests:
