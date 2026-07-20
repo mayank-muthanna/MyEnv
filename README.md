@@ -18,6 +18,42 @@ interactive CLI, encryption flow, tests, GitHub Action, NPM launcher, and demo
 fixtures. See [architecture](docs/architecture.md) for the design and
 [usage](docs/usage.md) for deeper command details.
 
+## Built with Codex
+
+[![Watch: Building myenv with Codex](https://img.youtube.com/vi/6Kdoh-_m504/maxresdefault.jpg)](https://www.youtube.com/watch?v=6Kdoh-_m504)
+
+> **Watch the build:** [How Codex helped build myenv](https://www.youtube.com/watch?v=6Kdoh-_m504)
+
+myenv began as a simple observation: one missing environment variable can break
+a deployment, while one exposed secret can cause something much worse. I started
+in the Codex CLI with that rough idea, used `/plan` to split it into clear
+implementation stages, and asked Codex to lock the architecture in
+[`docs/architecture.md`](docs/architecture.md) before writing the core code.
+
+I chose the Codex CLI because it gave direct control and fast feedback: every
+command, diff, test, and design decision stayed visible while the product grew.
+Codex helped take myenv through each practical stage:
+
+1. **Schema contract** — introduce `.myenv.yaml`, then build `infer` to create a
+   starter schema from an existing dotenv file without copying secret values.
+2. **Validation** — add `validate` for missing variables, types, patterns, and
+   allowed numeric ranges before an app runs.
+3. **Encryption** — add gzip compression plus AES-256-GCM encryption so an
+   encrypted dotenv payload can live in `.myenv.yaml` while its key stays
+   separate and is never committed.
+4. **Safe recovery** — add `decrypt`, which authenticates the payload and
+   restores exact dotenv bytes only with the correct key.
+5. **CI** — add `myenv ci`. Without a key, it compares code with schema; with
+   `MYENV_DECRYPT_KEY` in GitHub Actions secrets, it decrypts values in memory
+   and validates them against the schema. Plaintext values are never committed,
+   written to disk in CI, or printed in logs.
+6. **Distribution** — package myenv for NPM with cross-platform Go binaries so
+   users can run `npm install -g @mayank_muthanna/myenv` and then use `myenv`.
+
+Codex, powered by GPT-5.6 with Terra Medium and Luna Max, helped move the
+project from rough plan to architecture, implementation, tests, packaging, and
+CI with minimal intervention. The result is a local-first developer tool that
+people can use today, not only a prototype.
 ## Install
 
 ### Recommended: NPM
